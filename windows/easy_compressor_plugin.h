@@ -27,12 +27,6 @@ class EasyCompressorPlugin : public flutter::Plugin {
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> progress_sink_;
 };
 
-// C API for Flutter plugin registration
-extern "C" {
-  __declspec(dllexport) void EasyCompressorPluginCApiRegisterWithRegistrar(
-      FlutterDesktopPluginRegistrarRef registrar);
-}
-
 }  // namespace easy_compressor
 
 #endif  // FLUTTER_PLUGIN_EASY_COMPRESSOR_PLUGIN_H_

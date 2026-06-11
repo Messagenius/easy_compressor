@@ -1,5 +1,7 @@
 #include "video_compressor.h"
 
+#define NOMINMAX
+#pragma warning(disable: 4245)
 #include <windows.h>
 #include <mfapi.h>
 #include <mfidl.h>

@@ -113,7 +113,7 @@ void EasyCompressorPlugin::HandleMethodCall(
 
     auto progress_sink = progress_sink_.get();
 
-    std::thread([=, this]() mutable {
+    std::thread([=]() mutable {
       g_compressor = std::make_unique<VideoCompressor>();
 
       auto compResult = g_compressor->Compress(
@@ -200,6 +200,8 @@ void EasyCompressorPlugin::HandleMethodCall(
   }
 }
 
+}  // namespace easy_compressor
+
 extern "C" {
   __declspec(dllexport) void EasyCompressorPluginCApiRegisterWithRegistrar(
       FlutterDesktopPluginRegistrarRef registrar) {
@@ -208,5 +210,3 @@ extern "C" {
             ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar));
   }
 }
-
-}  // namespace easy_compressor

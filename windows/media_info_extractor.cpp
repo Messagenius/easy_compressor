@@ -1,5 +1,6 @@
 #include "media_info_extractor.h"
 
+#pragma warning(disable: 4245)
 #include <windows.h>
 #include <mfapi.h>
 #include <mfidl.h>
