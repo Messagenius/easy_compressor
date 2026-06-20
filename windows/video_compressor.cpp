@@ -142,6 +142,10 @@ flutter::EncodableValue VideoCompressor::Compress(
     UINT32 origWidth = 0, origHeight = 0;
     MFGetAttributeSize(videoType, MF_MT_FRAME_SIZE, &origWidth, &origHeight);
 
+    // Capture the source rotation so we can preserve it as metadata on the output.
+    // (Read before the reader is reconfigured to NV12, which drops the attribute.)
+    UINT32 rotation = MFGetAttributeUINT32(videoType, MF_MT_VIDEO_ROTATION, MFVideoRotationFormat_0);
+
     UINT32 fpsNum = 30, fpsDen = 1;
     MFGetAttributeRatio(videoType, MF_MT_FRAME_RATE, &fpsNum, &fpsDen);
 
@@ -194,6 +198,11 @@ flutter::EncodableValue VideoCompressor::Compress(
     if (targetHeight < 2) targetHeight = 2;
 
     int targetBitrate = CalculateTargetBitrate(origBitrate, quality, targetHeight);
+
+    // Reported dimensions are in display orientation (swapped for 90/270 rotation).
+    bool isRotated = (rotation == MFVideoRotationFormat_90 || rotation == MFVideoRotationFormat_270);
+    int reportWidth = isRotated ? targetHeight : targetWidth;
+    int reportHeight = isRotated ? targetWidth : targetHeight;
 
     UINT32 targetFpsNum = fpsNum;
     UINT32 targetFpsDen = fpsDen;
@@ -251,8 +260,8 @@ flutter::EncodableValue VideoCompressor::Compress(
         errorMap[flutter::EncodableValue("compressedSize")] = flutter::EncodableValue(0);
         errorMap[flutter::EncodableValue("duration")] = flutter::EncodableValue(durationMs);
         errorMap[flutter::EncodableValue("compressionTime")] = flutter::EncodableValue(0);
-        errorMap[flutter::EncodableValue("width")] = flutter::EncodableValue(targetWidth);
-        errorMap[flutter::EncodableValue("height")] = flutter::EncodableValue(targetHeight);
+        errorMap[flutter::EncodableValue("width")] = flutter::EncodableValue(reportWidth);
+        errorMap[flutter::EncodableValue("height")] = flutter::EncodableValue(reportHeight);
         return flutter::EncodableValue(errorMap);
     }
 
@@ -266,6 +275,11 @@ flutter::EncodableValue VideoCompressor::Compress(
     MFSetAttributeRatio(outputVideoType, MF_MT_FRAME_RATE, targetFpsNum, targetFpsDen);
     MFSetAttributeRatio(outputVideoType, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
     outputVideoType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+    // Preserve the source rotation so the MP4 muxer writes the display matrix and the
+    // clip plays upright (frames stay in encoded orientation, no squash).
+    if (rotation != MFVideoRotationFormat_0) {
+        outputVideoType->SetUINT32(MF_MT_VIDEO_ROTATION, rotation);
+    }
 
     DWORD videoStreamIndex = 0;
     hr = writer->AddStream(outputVideoType, &videoStreamIndex);
@@ -429,9 +443,9 @@ flutter::EncodableValue VideoCompressor::Compress(
     resultMap[flutter::EncodableValue("compressionTime")] =
         flutter::EncodableValue(compressionTime);
     resultMap[flutter::EncodableValue("width")] =
-        flutter::EncodableValue(targetWidth);
+        flutter::EncodableValue(reportWidth);
     resultMap[flutter::EncodableValue("height")] =
-        flutter::EncodableValue(targetHeight);
+        flutter::EncodableValue(reportHeight);
     resultMap[flutter::EncodableValue("status")] =
         flutter::EncodableValue(is_cancelled_ ? "cancelled" : "success");
 

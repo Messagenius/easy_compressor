@@ -8,7 +8,7 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.effect.ScaleAndRotateTransformation
+import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
@@ -194,16 +194,21 @@ class VideoCompressor(private val context: Context) {
 
             val mediaItem = MediaItem.fromUri(Uri.fromFile(inputFile))
 
-            // Build effects for scaling if needed
-            val effects = if (targetWidth != originalWidth || targetHeight != originalHeight) {
-                val scaleX = targetWidth.toFloat() / originalWidth.toFloat()
-                val scaleY = targetHeight.toFloat() / originalHeight.toFloat()
+            // Media3 already decodes frames upright (display orientation) and carries the
+            // source rotation through to the output. We only need to set the output resolution;
+            // Presentation scales uniformly and preserves aspect ratio (no squash). targetWidth/
+            // targetHeight are in display orientation.
+            val displayWidth = if (rotation == 90 || rotation == 270) originalHeight else originalWidth
+            val displayHeight = if (rotation == 90 || rotation == 270) originalWidth else originalHeight
+            val effects = if (targetWidth != displayWidth || targetHeight != displayHeight) {
                 Effects(
                     emptyList(),
                     listOf(
-                        ScaleAndRotateTransformation.Builder()
-                            .setScale(scaleX, scaleY)
-                            .build()
+                        Presentation.createForWidthAndHeight(
+                            targetWidth,
+                            targetHeight,
+                            Presentation.LAYOUT_SCALE_TO_FIT
+                        )
                     )
                 )
             } else {

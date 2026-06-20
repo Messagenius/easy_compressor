@@ -100,34 +100,44 @@ class VideoCompressor {
         let transform = videoTrack.preferredTransform
         let durationMs = Int(CMTimeGetSeconds(asset.duration) * 1000)
 
+        // The frame buffer is encoded in `naturalSize`; the rotation transform tells the
+        // player how to display it. We keep the encoded orientation and preserve the
+        // transform so the output is upright with the correct aspect ratio (no squash).
         let isRotated = transform.a == 0
-        let originalWidth = Int(isRotated ? naturalSize.height : naturalSize.width)
-        let originalHeight = Int(isRotated ? naturalSize.width : naturalSize.height)
+
+        // Display dimensions drive the max-height/width constraints and reporting.
+        let displayWidth = isRotated ? naturalSize.height : naturalSize.width
+        let displayHeight = isRotated ? naturalSize.width : naturalSize.height
+
         let originalBitrate = Int(videoTrack.estimatedDataRate)
 
-        var targetWidth = originalWidth
-        var targetHeight = originalHeight
+        // Compute a single uniform downscale factor from the display constraints (never upscale).
+        var scale = 1.0
+        if let mh = maxHeight, Int(displayHeight) > mh {
+            scale = min(scale, Double(mh) / Double(displayHeight))
+        }
+        if let mw = maxWidth, Int(displayWidth) > mw {
+            scale = min(scale, Double(mw) / Double(displayWidth))
+        }
 
-        if let mh = maxHeight, targetHeight > mh {
-            let scale = Double(mh) / Double(targetHeight)
-            targetHeight = mh
-            targetWidth = Int(Double(targetWidth) * scale)
-        }
-        if let mw = maxWidth, targetWidth > mw {
-            let scale = Double(mw) / Double(targetWidth)
-            targetWidth = mw
-            targetHeight = Int(Double(targetHeight) * scale)
-        }
+        // Apply the uniform scale to the ENCODED dimensions so the writer receives frames
+        // with their original aspect ratio preserved.
+        var targetWidth = Int((Double(naturalSize.width) * scale).rounded())
+        var targetHeight = Int((Double(naturalSize.height) * scale).rounded())
 
         targetWidth = (targetWidth / 2) * 2
         targetHeight = (targetHeight / 2) * 2
         if targetWidth < 2 { targetWidth = 2 }
         if targetHeight < 2 { targetHeight = 2 }
 
+        // Reported/cap dimensions are in display orientation.
+        let outputDisplayWidth = isRotated ? targetHeight : targetWidth
+        let outputDisplayHeight = isRotated ? targetWidth : targetHeight
+
         let targetBitrate = VideoCompressor.calculateTargetBitrate(
             originalBitrate: originalBitrate,
             quality: quality,
-            outputHeight: targetHeight
+            outputHeight: outputDisplayHeight
         )
 
         let outURL: URL
@@ -187,7 +197,8 @@ class VideoCompressor {
 
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoWriterSettings)
         videoInput.expectsMediaDataInRealTime = false
-        if !isRotated { videoInput.transform = transform }
+        // Preserve the source rotation as metadata so players display the clip upright.
+        videoInput.transform = transform
         if writer.canAdd(videoInput) { writer.add(videoInput) }
 
         var audioInput: AVAssetWriterInput?
@@ -271,8 +282,8 @@ class VideoCompressor {
                 "compressedSize": 0,
                 "duration": durationMs,
                 "compressionTime": Int(Date().timeIntervalSince(startTime) * 1000),
-                "width": targetWidth,
-                "height": targetHeight,
+                "width": outputDisplayWidth,
+                "height": outputDisplayHeight,
                 "status": "cancelled"
             ]
         }
@@ -292,8 +303,8 @@ class VideoCompressor {
             "compressedSize": compressedSize,
             "duration": durationMs,
             "compressionTime": compressionTime,
-            "width": targetWidth,
-            "height": targetHeight,
+            "width": outputDisplayWidth,
+            "height": outputDisplayHeight,
             "status": "success"
         ]
     }
