@@ -12,6 +12,12 @@ add_library(${PLUGIN_NAME} SHARED
 
 apply_standard_settings(${PLUGIN_NAME})
 
+# C++/WinRT requires exceptions and the correct __cplusplus value.
+# apply_standard_settings sets _HAS_EXCEPTIONS=0; override it here so the
+# WinRT projection can throw hresult_error correctly.
+target_compile_definitions(${PLUGIN_NAME} PRIVATE _HAS_EXCEPTIONS=1)
+target_compile_options(${PLUGIN_NAME} PRIVATE /Zc:__cplusplus)
+
 set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   CXX_STANDARD 17
@@ -33,6 +39,7 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE
   mf.lib
   shlwapi.lib
   propsys.lib
+  windowsapp.lib
 )
 
 set(easy_compressor_bundled_libraries
